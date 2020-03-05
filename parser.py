@@ -8,8 +8,45 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect
+from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect, LTTextLineHorizontal
 import sys
+
+
+class TextBlock(object):
+    def __init__(self, other):
+        self.items = []
+        
+        if isinstance(other, LTTextBox):
+            self.bbox = other.bbox
+            for obj in other:
+                self.items.append(obj)
+        elif isinstance(other,LTTextLineHorizontal):
+            self.bbox = other.bbox
+            self.items.append(other)
+
+    def append(self, other):
+        self.bbox = (min(self.bbox[0],other.bbox[0]), self.bbox[1], max(self.bbox[2],other.bbox[2]), self.bbox[3])
+        self.items.append(other)
+    
+    def __eq__(self, other):
+        return abs(self.bbox[3] - other.bbox[3]) <= 1   
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __iter__(self):
+        self._n = 0 
+        return self
+    
+    def __next__(self):
+        if len(self.items) >  self._n:
+            res =  self.items[self._n]
+            self._n += 1
+            return res 
+        else:
+            raise StopIteration
+
+          
 
 class PdfMinerWrapper(object):
     """
@@ -58,10 +95,31 @@ class ExcelPDFParser(object):
     def __init__(self):
         """
         """
+        #if som line is not aligned
         self.lineTolerance = 2
+        #strip whitespace in cells
         self.stripCells = True
+        #make fake cell in no cell row and return text in them
         self.returnNocells = False
+        #if textbox in cell is multiline split them and create new rows as visual is
+        self.splitMultiline = True
         
+    def splitMultilineBoxes(self,tboxes):
+        first = True
+        res = []
+        for tbox in tboxes:
+            for obj in tbox:
+                if first:
+                    res.append(TextBlock(obj))
+                    first = False
+                else:
+                    if res[-1] != obj:
+                        res.append(TextBlock(obj))
+                    else:
+                        res[-1].append(obj)
+                    
+        
+        return res
 
     def overlapY(self,bbox, rowy):
         if bbox[1] <= rowy and bbox[3] >= rowy:
@@ -79,9 +137,8 @@ class ExcelPDFParser(object):
                     cells[-1][1] = line[0]
                     cells[-1].reverse()
                     cells.append([line[0],0])
-                #endif
-            #endif
-        #endfor
+                
+            
         if len(cells) != 0:
             cells = cells[:-1]
             cells.reverse()
@@ -123,10 +180,11 @@ class ExcelPDFParser(object):
                 else:
                     continue
 
-            #endif
+            
             #now parse char by char and append it to right cell in this row
-            for obj in tbox:
-                #print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+            for obj in tbox:   #LTTextLineHorizontal
+                #print (obj)
+                #print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% obj.bbox)
                 for c in obj:
                     if not isinstance(c, LTChar):
                         continue
@@ -138,7 +196,7 @@ class ExcelPDFParser(object):
                 
         if len(self.data) != 0 and self.stripCells:
             self.data[-1]['cellsData'] = list(map(str.strip,self.data[-1]['cellsData']))   
-        #endfor
+        
 
 
     def parse(self, filename):
@@ -164,11 +222,15 @@ class ExcelPDFParser(object):
 
                     if not isinstance(tbox, LTTextBox):
                         continue
+                    #print(tbox)
                     #print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
-                    tboxes.append(tbox)
+                    tboxes.append(TextBlock(tbox))
+                #need preprocess multiline?
+                if self.splitMultiline:
+                    tboxes = self.splitMultilineBoxes(tboxes)
+
                 #process page text boxes    
-                self.processTextToCells(vlines,tboxes)
-                #break   
+                self.processTextToCells(vlines,tboxes) 
         return self.info,self.data
 
 
@@ -182,6 +244,7 @@ def main():
     #print(info)
     for line in data:
         print(line['cellsData'])
+
 if __name__=='__main__':
     main()
 
