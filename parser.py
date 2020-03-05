@@ -8,8 +8,9 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure
+from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect
 import sys
+
 class PdfMinerWrapper(object):
     """
     Usage:
@@ -49,44 +50,103 @@ class PdfMinerWrapper(object):
     
     def __exit__(self, _type, value, traceback):
         self.fp.close()
-            
+
+
+
+class ExcelPDFParser(object):
+    
+    def __init__(self):
+        """
+        """
+        self.lineTolerance = 2
+        pass 
+
+    def overlapY(self,bbox, rowy):
+        if bbox[1] <= rowy and bbox[3] >= rowy:
+            return True
+        return False 
+
+    def prepareCellsForLine(self, vlines, rowy):
+        cells = []
+        
+        for line in vlines:
+            if self.overlapY(line,rowy):
+                if len(cells) == 0:
+                    cells.append([line[0],0])
+                else:
+                    cells[-1][1] = line[0]
+                    cells.append([line[0],0])
+                #endif
+            #endif
+        #endfor
+        cells = cells[:-1]
+        print(cells)
+
+        return {'rowy': rowy,
+                'cells':[],
+                 'cellsData':['']*len(cells)}
+
+    def computeCellIndex(self, cells, x):
+        idx = 0
+        return idx
+    
+    def processTextToCells(self,vlines,tboxes):
+        #sort vlines and tboxex by y2
+        vlines.sort(key = lambda x: x[0], reverse=True)
+        tboxes.sort(key = lambda x: x.bbox[3], reverse=True)
+        for tbox in tboxes:
+            rowy = tbox.bbox[3]
+            if len(self.data) == 0 or abs(self.data[-1]['rowy'] - rowy) >  self.lineTolerance:
+                self.data.append(self.prepareCellsForLine(vlines,rowy)) 
+
+
+
+
+    def parse(self, filename):
+        self.data = []
+        with PdfMinerWrapper(filename) as doc:
+            for page in doc:     
+                print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
+                #self.pageWidth = page.width
+                #self.pageHeight = page.height
+                vlines = [] 
+                tboxes = []
+                for tbox in page:
+                    #print (tbox)
+                    if isinstance(tbox,LTRect):
+                        #is horizontal or vertical ?
+                        dx = tbox.bbox[2] - tbox.bbox[0]
+                        dy = tbox.bbox[3] - tbox.bbox[1]
+                        if dx < dy:
+                            #print("Vertical Box %s lenght %s" % (str(tbox.bbox),dy))
+                            vlines.append(tbox.bbox)
+
+                    if not isinstance(tbox, LTTextBox):
+                        continue
+                    print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+                    tboxes.append(tbox)
+                    for obj in tbox:
+
+                        print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+                        continue
+                        for c in obj:
+                            if not isinstance(c, LTChar):
+                                continue
+                            print (c.get_text().encode('UTF-8'), '(%0.2f, %0.2f, %0.2f, %0.2f)'% c.bbox, c.fontname, c.size,)
+                        print('\n')
+                    #process text boxes
+                self.processTextToCells(vlines,tboxes)
+                break          
+
+
+
+
+
 def main():
-    with PdfMinerWrapper(sys.argv[1]) as doc:
-        for page in doc:     
-            print ('Page no.', page.pageid, 'Size',  (page.height, page.width) )     
-            for tbox in page:
-                print (tbox)
-                if not isinstance(tbox, LTTextBox):
-                    continue
-                print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
-                for obj in tbox:
-                    print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
-                    continue
-                    for c in obj:
-                        if not isinstance(c, LTChar):
-                            continue
-                        print (c.get_text().encode('UTF-8'), '(%0.2f, %0.2f, %0.2f, %0.2f)'% c.bbox, c.fontname, c.size,)
-                    print('\n')
-            break          
-                
+    p = ExcelPDFParser()
+    p.parse(sys.argv[1])        
 if __name__=='__main__':
     main()
 
-#tables = camelot.read_pdf(sys.argv[1],pages='1',flavor='lattice')
 
 
-#print(tables[0].df )
-#print(tables[1].df)
-
-'''
-file = open(sys.argv[1],"rb")
-pr = PyPDF2.PdfFileReader(file)
-
-print(pr.documentInfo)
-
-page = pr.getPage(0)
-cntn = page.getContents().getData()
-
-print (page)
-file.close()
-'''
