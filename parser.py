@@ -59,7 +59,9 @@ class ExcelPDFParser(object):
         """
         """
         self.lineTolerance = 2
-        pass 
+        self.stripCells = True
+        self.returnNocells = False
+        
 
     def overlapY(self,bbox, rowy):
         if bbox[1] <= rowy and bbox[3] >= rowy:
@@ -75,20 +77,33 @@ class ExcelPDFParser(object):
                     cells.append([line[0],0])
                 else:
                     cells[-1][1] = line[0]
+                    cells[-1].reverse()
                     cells.append([line[0],0])
                 #endif
             #endif
         #endfor
-        cells = cells[:-1]
-        print(cells)
+        if len(cells) != 0:
+            cells = cells[:-1]
+            cells.reverse()
+        else:
+            if self.returnNocells:
+                cells.append([0,self.pageWidth])
+            else:
+                return None
 
+        #print(cells)
         return {'rowy': rowy,
-                'cells':[],
-                 'cellsData':['']*len(cells)}
+                'cells':cells,
+                 'cellsData':[''] * len(cells)}
 
     def computeCellIndex(self, cells, x):
         idx = 0
-        return idx
+        for cell in cells:
+            if cell[1] >= x and cell[0] <= x:
+                #have it
+                return idx
+            idx += 1
+        return -1
     
     def processTextToCells(self,vlines,tboxes):
         #sort vlines and tboxex by y2
@@ -97,18 +112,44 @@ class ExcelPDFParser(object):
         for tbox in tboxes:
             rowy = tbox.bbox[3]
             if len(self.data) == 0 or abs(self.data[-1]['rowy'] - rowy) >  self.lineTolerance:
-                self.data.append(self.prepareCellsForLine(vlines,rowy)) 
+                if len(self.data) != 0 and self.stripCells:
+                    #strip last
+                    #print("%s " % (self.data[-1]['cellsData'],))
+                    self.data[-1]['cellsData'] = list(map(str.strip,self.data[-1]['cellsData']))
+                    #print("%s " % (self.data[-1]['cellsData'],)) 
+                newRow = self.prepareCellsForLine(vlines,rowy)
+                if newRow:
+                    self.data.append(newRow) 
+                else:
+                    continue
 
-
+            #endif
+            #now parse char by char and append it to right cell in this row
+            for obj in tbox:
+                #print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+                for c in obj:
+                    if not isinstance(c, LTChar):
+                        continue
+                    idx = self.computeCellIndex(self.data[-1]['cells'],c.bbox[0])
+                    #print(idx)
+                    if idx != -1:
+                        self.data[-1]['cellsData'][idx] += c.get_text()
+                    #print (c.get_text().encode('UTF-8'), '(%0.2f, %0.2f, %0.2f, %0.2f)'% c.bbox, c.fontname, c.size,)
+                
+        if len(self.data) != 0 and self.stripCells:
+            self.data[-1]['cellsData'] = list(map(str.strip,self.data[-1]['cellsData']))   
+        #endfor
 
 
     def parse(self, filename):
         self.data = []
+        self.info = []
         with PdfMinerWrapper(filename) as doc:
+            self.info = doc.doc.info
             for page in doc:     
-                print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
-                #self.pageWidth = page.width
-                #self.pageHeight = page.height
+                #print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
+                self.pageWidth = page.width
+                self.pageHeight = page.height
                 vlines = [] 
                 tboxes = []
                 for tbox in page:
@@ -123,20 +164,12 @@ class ExcelPDFParser(object):
 
                     if not isinstance(tbox, LTTextBox):
                         continue
-                    print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+                    #print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
                     tboxes.append(tbox)
-                    for obj in tbox:
-
-                        print (' '*2, obj.get_text()[:-1], '(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
-                        continue
-                        for c in obj:
-                            if not isinstance(c, LTChar):
-                                continue
-                            print (c.get_text().encode('UTF-8'), '(%0.2f, %0.2f, %0.2f, %0.2f)'% c.bbox, c.fontname, c.size,)
-                        print('\n')
-                    #process text boxes
+                #process page text boxes    
                 self.processTextToCells(vlines,tboxes)
-                break          
+                #break   
+        return self.info,self.data
 
 
 
@@ -144,7 +177,11 @@ class ExcelPDFParser(object):
 
 def main():
     p = ExcelPDFParser()
-    p.parse(sys.argv[1])        
+    info,data = p.parse(sys.argv[1]) 
+    print("Author %s" % str(info[0]["Author"]))    
+    #print(info)
+    for line in data:
+        print(line['cellsData'])
 if __name__=='__main__':
     main()
 
