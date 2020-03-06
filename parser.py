@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-#import camelot
-#import PyPDF2
-import sys
-
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfdocument import PDFDocument
@@ -46,8 +42,7 @@ class TextBlock(object):
         else:
             raise StopIteration
 
-          
-
+            
 class PdfMinerWrapper(object):
     """
     Usage:
@@ -88,8 +83,7 @@ class PdfMinerWrapper(object):
     def __exit__(self, _type, value, traceback):
         self.fp.close()
 
-
-
+        
 class ExcelPDFParser(object):
     
     def __init__(self):
@@ -118,7 +112,6 @@ class ExcelPDFParser(object):
                     else:
                         res[-1].append(obj)
                     
-        
         return res
 
     def overlapY(self,bbox, rowy):
@@ -137,8 +130,7 @@ class ExcelPDFParser(object):
                     cells[-1][1] = line[0]
                     cells[-1].reverse()
                     cells.append([line[0],0])
-                
-            
+                     
         if len(cells) != 0:
             cells = cells[:-1]
             cells.reverse()
@@ -179,7 +171,6 @@ class ExcelPDFParser(object):
                     self.data.append(newRow) 
                 else:
                     continue
-
             
             #now parse char by char and append it to right cell in this row
             for obj in tbox:   #LTTextLineHorizontal
@@ -197,7 +188,6 @@ class ExcelPDFParser(object):
         if len(self.data) != 0 and self.stripCells:
             self.data[-1]['cellsData'] = list(map(str.strip,self.data[-1]['cellsData']))   
         
-
 
     def parse(self, filename):
         self.data = []
@@ -232,9 +222,6 @@ class ExcelPDFParser(object):
                 #process page text boxes    
                 self.processTextToCells(vlines,tboxes) 
         return self.info,self.data
-
-
-
 
 
 def main():
