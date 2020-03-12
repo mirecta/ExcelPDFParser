@@ -201,9 +201,9 @@ class ExcelPDFParser(object):
         with PdfMinerWrapper(filename) as doc:
             self.info = doc.doc.info
             for page in doc:    
-                if pageNr != 3: 
-                    pageNr += 1
-                    continue
+                #if pageNr != 3: 
+                #    pageNr += 1
+                #   continue
                 #print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
                 self.pageWidth = page.width
                 self.pageHeight = page.height
@@ -231,7 +231,7 @@ class ExcelPDFParser(object):
 
                 #process page text boxes    
                 self.processTextToCells(vlines,tboxes) 
-                if pageNr == 3: break
+                #if pageNr == 3: break
                 pageNr += 1
         return self.info,self.data
 
