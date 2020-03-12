@@ -215,7 +215,7 @@ class ExcelPDFParser(object):
                         #is horizontal or vertical ?
                         dx = tbox.bbox[2] - tbox.bbox[0]
                         dy = tbox.bbox[3] - tbox.bbox[1]
-                        if dx < dy and dx <= 5 * self.lineTolerance:
+                        if dx < dy and dx <= 2 * self.lineTolerance:
                             #print("Vertical Box %s lenght %s" % (str(tbox.bbox),dy))
                             vlines.append(tbox.bbox)
                    
