@@ -8,7 +8,7 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect, LTTextLineHorizontal
+from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect, LTTextLineHorizontal, LTLine
 import sys
 
 
@@ -103,6 +103,9 @@ class ExcelPDFParser(object):
         self.returnNocells = False
         #if textbox in cell is multiline split them and create new rows as visual is
         self.splitMultiline = True
+        #if table has no border and first cell in row is open from left and last cell is open from right 
+        #and if u want this last and first cell this must be true 
+        self.addBoundingPageAsLine = True
         
     def splitMultilineBoxes(self,tboxes):
         first = True
@@ -142,6 +145,8 @@ class ExcelPDFParser(object):
         if len(cells) != 0:
             cells = cells[:-1]
             cells.reverse()
+            if self.addBoundingPageAsLine and cells[0][0] >= (0 + self.lineTolerance) and  cells[-1][1] <= (self.pageWidth - self.lineTolerance):
+                cells = [[0,cells[0][0]]] + cells + [[cells[-1][1],self.pageWidth]]
         else:
             if self.returnNocells:
                 cells.append([0,self.pageWidth])
@@ -202,9 +207,13 @@ class ExcelPDFParser(object):
     def parse(self, filename):
         self.data = []
         self.info = []
+        pageNr = 0
         with PdfMinerWrapper(filename) as doc:
             self.info = doc.doc.info
-            for page in doc:     
+            for page in doc:    
+                if pageNr != 3: 
+                    pageNr += 1
+                    continue
                 #print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
                 self.pageWidth = page.width
                 self.pageHeight = page.height
@@ -212,14 +221,15 @@ class ExcelPDFParser(object):
                 tboxes = []
                 for tbox in page:
                     #print (tbox)
-                    if isinstance(tbox,LTRect):
+                    if isinstance(tbox,LTRect) or isinstance(tbox,LTLine):
                         #is horizontal or vertical ?
                         dx = tbox.bbox[2] - tbox.bbox[0]
                         dy = tbox.bbox[3] - tbox.bbox[1]
-                        if dx < dy:
+                        if dx < dy and dx <= self.lineTolerance:
                             #print("Vertical Box %s lenght %s" % (str(tbox.bbox),dy))
                             vlines.append(tbox.bbox)
-
+                   
+                    
                     if not isinstance(tbox, LTTextBox):
                         continue
                     #print(tbox)
@@ -231,6 +241,8 @@ class ExcelPDFParser(object):
 
                 #process page text boxes    
                 self.processTextToCells(vlines,tboxes) 
+                if pageNr == 3: break
+                pageNr += 1
         return self.info,self.data
 
 
