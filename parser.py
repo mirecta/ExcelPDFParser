@@ -4,9 +4,10 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect, LTTextLineHorizontal, LTLine
+from pdfminer.layout import LAParams, LTTextBox,LTChar, LTFigure, LTRect, LTTextLineHorizontal,LTTextLineVertical, LTLine
 import sys
 
+ONLY_PAGE=None
 
 class TextBlock(object):
     def __init__(self, other):
@@ -16,15 +17,17 @@ class TextBlock(object):
             self.bbox = other.bbox
             for obj in other:
                 self.items.append(obj)
-        elif isinstance(other,LTTextLineHorizontal):
+        elif isinstance(other,LTTextLineHorizontal) or isinstance(other,LTTextLineVertical):
             self.bbox = other.bbox
             self.items.append(other)
+
 
     def append(self, other):
         self.bbox = (min(self.bbox[0],other.bbox[0]), self.bbox[1], max(self.bbox[2],other.bbox[2]), self.bbox[3])
         self.items.append(other)
     
     def __eq__(self, other):
+        #print(">>>>>>>> %s" % other)
         return abs(self.bbox[3] - other.bbox[3]) <= 1   
 
     def __ne__(self, other):
@@ -67,7 +70,7 @@ class PdfMinerWrapper(object):
     
     def _parse_pages(self):
         rsrcmgr = PDFResourceManager()
-        laparams = LAParams(char_margin=3.5, all_texts = True)
+        laparams = LAParams(char_margin=3.5, all_texts = True , detect_vertical=True)
         device = PDFPageAggregator(rsrcmgr, laparams=laparams)
         interpreter = PDFPageInterpreter(rsrcmgr, device)
     
@@ -102,6 +105,8 @@ class ExcelPDFParser(object):
         #if table has no border and first cell in row is open from left and last cell is open from right 
         #and if u want this last and first cell this must be true 
         self.addBoundingPageAsLine = True
+        #ignore veritcal text cells
+        self.ignoreVertical = True
         
     def splitMultilineBoxes(self,tboxes):
         first = True
@@ -209,9 +214,9 @@ class ExcelPDFParser(object):
         with PdfMinerWrapper(filename) as doc:
             self.info = doc.doc.info
             for page in doc:    
-                #if pageNr != 144: 
-                #    pageNr += 1
-                #    continue
+                if  (not ONLY_PAGE is None) and  pageNr != ONLY_PAGE: 
+                    pageNr += 1
+                    continue
                 #print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
                 self.pageWidth = page.width
                 self.pageHeight = page.height
@@ -230,8 +235,11 @@ class ExcelPDFParser(object):
                     
                     if not isinstance(tbox, LTTextBox):
                         continue
-                    #print(tbox)
+                    #print("%s %s" % ( tbox, tbox.get_writing_mode()))
                     #print (' '*1, 'Block', 'bbox=(%0.2f, %0.2f, %0.2f, %0.2f)'% tbox.bbox)
+                    if self.ignoreVertical and isinstance(tbox,LTTextLineVertical):
+                        continue
+
                     tboxes.append(TextBlock(tbox))
                 #need preprocess multiline?
                 if self.splitMultiline:
@@ -239,7 +247,7 @@ class ExcelPDFParser(object):
 
                 #process page text boxes    
                 self.processTextToCells(vlines,tboxes) 
-                #if pageNr == 3: break
+                if (not ONLY_PAGE is None) and  pageNr == ONLY_PAGE: break
                 pageNr += 1
         return self.info,self.data
 
