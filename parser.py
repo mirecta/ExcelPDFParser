@@ -89,8 +89,10 @@ class ExcelPDFParser(object):
     def __init__(self):
         """
         """
-        #if som line is not aligned
+        #min line thickness
         self.lineTolerance = 2
+        #if some line is not aligned
+        self.rowTolerance = 5
         #strip whitespace in cells
         self.stripCells = True
         #make fake cell in no cell row and return text in them
@@ -127,6 +129,7 @@ class ExcelPDFParser(object):
         
         for line in vlines:
             if self.overlapY(line,rowy):
+                #print(line)
                 if len(cells) == 0:
                     cells.append([line[0],0])
                 else:
@@ -135,10 +138,15 @@ class ExcelPDFParser(object):
                     cells.append([line[0],0])
                      
         if len(cells) != 0:
-            cells = cells[:-1]
+            #print(">> %s %s " % (len(cells),cells))
             cells.reverse()
-            if self.addBoundingPageAsLine and cells[0][0] >= (0 + self.lineTolerance) and  cells[-1][1] <= (self.pageWidth - self.lineTolerance):
-                cells = [[0,cells[0][0]]] + cells + [[cells[-1][1],self.pageWidth]]
+            if len(cells) == 1:
+                if self.addBoundingPageAsLine and cells[0][0] >= (0 + self.lineTolerance):
+                    cells = [[0,cells[0][0]]] + [[cells[0][0],self.pageWidth]]
+            else:
+                cells = cells[1:]
+                if self.addBoundingPageAsLine and cells[0][0] >= (0 + self.lineTolerance) and  cells[-1][1] <= (self.pageWidth - self.lineTolerance):
+                    cells = [[0,cells[0][0]]] + cells + [[cells[-1][1],self.pageWidth]]
         else:
             if self.returnNocells:
                 cells.append([0,self.pageWidth])
@@ -165,7 +173,7 @@ class ExcelPDFParser(object):
         tboxes.sort(key = lambda x: x.bbox[3], reverse=True)
         for tbox in tboxes:
             rowy = tbox.bbox[3]
-            if len(self.data) == 0 or abs(self.data[-1]['rowy'] - rowy) >  self.lineTolerance:
+            if len(self.data) == 0 or abs(self.data[-1]['rowy'] - rowy) >  self.rowTolerance:
                 if len(self.data) != 0 and self.stripCells:
                     #strip last
                     #print("%s " % (self.data[-1]['cellsData'],))
@@ -201,9 +209,9 @@ class ExcelPDFParser(object):
         with PdfMinerWrapper(filename) as doc:
             self.info = doc.doc.info
             for page in doc:    
-                #if pageNr != 3: 
+                #if pageNr != 144: 
                 #    pageNr += 1
-                #   continue
+                #    continue
                 #print ('Page no.', page.pageid, 'Size',  (page.height, page.width) ) 
                 self.pageWidth = page.width
                 self.pageHeight = page.height
@@ -239,7 +247,7 @@ class ExcelPDFParser(object):
 def main():
     p = ExcelPDFParser()
     info,data = p.parse(sys.argv[1]) 
-    print("Author %s" % str(info[0]["Author"]))    
+    #print("Author %s" % str(info[0]["Author"]))    
     #print(info)
     for line in data:
         print(line['cellsData'])
